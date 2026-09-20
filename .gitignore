@@ -1,0 +1,11 @@
+# build
+build/
+*.o
+
+# python
+.venv/
+
+# data
+data/
+*.h5
+
