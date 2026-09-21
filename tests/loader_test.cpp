@@ -2,5 +2,5 @@
 
 TEST(Sanity, MathStillWorks)
 {
-    EXPECT_EQ(2 + 2, 4);
+    EXPECT_EQ(2 + 2, 5);
 }
