@@ -1,6 +1,7 @@
 # build
 build/
 *.o
+compile_commands.json
 
 # python
 .venv/
@@ -9,3 +10,6 @@ build/
 data/
 *.h5
 
+
+# editor/tooling
+.cache/

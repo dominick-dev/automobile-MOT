@@ -16,7 +16,7 @@ d1 = f[list(f.keys())[0]]
 print(d1.dtype.names)
 print(d1[0])
 
-print("")
+print()
 
 d2 = f[list(f.keys())[1]]
 print(d2.dtype.names)
@@ -28,6 +28,8 @@ t = d["timestamp"][:]
 print(np.unique(d["sensor_id"][:]))          # confirm 4 sensors
 print(len(np.unique(t)))                      # number of distinct timestamps
 print(np.bincount(np.unique(t, return_counts=True)[1]))  # detections per timestamp
+print()
+print(d.dtype)
 
 # sequence specific info
 t0 = np.unique(t)[500]                    # any timestamp, not the first
@@ -46,6 +48,8 @@ o = f["odometry"]
 ot = o["timestamp"][:]
 print(len(ot), "odometry rows")
 print(np.diff(ot)[:20] / 1e3, "ms between odometry samples")
+print()
+print(o.dtype)
 
 # plot sequence, get idea of what detections look like for a given sequence
 t0 = ut[2000]
@@ -56,3 +60,7 @@ plt.scatter(x, y, c=lbl, s=4, cmap="tab20")
 plt.gca().set_aspect("equal")
 plt.xlabel("x_cc (m, forward)"); plt.ylabel("y_cc (m, left)")
 plt.show()
+
+print(d.dtype.itemsize, "bytes per row")
+for n in d.dtype.names:
+    print(f"{n:16} {str(d.dtype[n]):8} offset {d.dtype.fields[n][1]}")
