@@ -24,6 +24,15 @@ FetchContent_Declare(json
 )
 FetchContent_MakeAvailable(json)
 
+FetchContent_Declare(googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG v1.15.2
+)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+include(GoogleTest)
+
 # library, future me add new .cpp files here as they are made
 add_library(rt
   src/io/radarscenes_loader.cpp)
@@ -44,6 +53,12 @@ target_compile_options(rt PRIVATE -Wall -Wextra -Wpedantic)
 
 # executable
 add_executable(run tools/run.cpp)
+add_executable(rt_tests tests/loader_test.cpp)
+
 target_link_libraries(run PRIVATE rt)
 target_compile_options(run PRIVATE -Wall -Wextra -Wpedantic)
 
+target_link_libraries(rt_tests PRIVATE rt GTest::gtest_main)
+target_compile_options(rt_tests PRIVATE -Wall -Wextra -Wpedantic)
+
+gtest_discover_tests(rt_tests)
