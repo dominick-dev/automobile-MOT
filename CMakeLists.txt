@@ -31,13 +31,13 @@ add_library(rt
 target_include_directories(rt
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
-          ${highfive_SOURCE_DIR}/include
-          ${HDF5_C_INCLUDE_DIRS}
 )
 
+target_include_directories(rt SYSTEM PRIVATE ${highfive_SOURCE_DIR}/include)
+
 target_link_libraries(rt
-  PUBLIC Eigen3::Eigen ${HDF5_C_LIBRARIES}
-  PRIVATE nlohmann_json::nlohmann_json
+  PUBLIC Eigen3::Eigen
+  PRIVATE HDF5::HDF5 nlohmann_json::nlohmann_json
 )
 
 target_compile_options(rt PRIVATE -Wall -Wextra -Wpedantic)
