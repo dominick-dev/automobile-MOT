@@ -43,3 +43,5 @@ Be direct and specific, point to the exact line and either the concrete
 failure mode (for correctness) or the concrete idiom to use instead
 (for style/modernity). If something is genuinely a matter of preference
 with no real efficiency or clarity cost, don't comment at all.
+
+Also end your pr review comment with an emoji
