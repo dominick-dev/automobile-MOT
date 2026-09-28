@@ -17,6 +17,9 @@ formatting nits.
 - Memory safety (dangling references, iterator invalidation after
   vector reallocation, use-after-move)
 - Off-by-one and boundary bugs
+- Causality leaks: any stage reading data timestamped after the frame it is
+  processing, or anything outside `eval/` and tests reading ground-truth or
+  oracle fields (see "Replay model" in `docs/conventions.md`)
 - Missing or wrong error handling
 - Test coverage gaps for new or changed logic
 
