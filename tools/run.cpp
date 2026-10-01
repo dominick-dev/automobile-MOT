@@ -5,7 +5,7 @@
  * its files to the rt lib
  */
 
-#include "rt/loader.hpp"
+#include "rt/io/loader.hpp"
 
 #include <cstdlib>
 #include <filesystem>
