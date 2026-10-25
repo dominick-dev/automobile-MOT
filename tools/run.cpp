@@ -6,12 +6,17 @@
  */
 
 #include "rt/io/loader.hpp"
+#include "rt/types.hpp"
 
+#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <optional>
 #include <string>
+
+#define SENSORS_PATH "data/RadarScenes/data/sensors.json"
+#define SEQUENCES_JSON_PATH "data/RadarScenes/data/sequences.json"
 
 namespace fs = std::filesystem;
 
@@ -45,6 +50,8 @@ std::optional<fs::path> resolve_seq(const std::string& arg)
 
 int main(int argc, char** argv)
 {
+    // TODO: extend this to also take an "-all" flag, processes all available sequences
+    // arg check
     if (argc < 2)
     {
         std::cerr << "usage: run <sequence>\n"
@@ -54,9 +61,10 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    const auto seq = resolve_seq(argv[1]);
+    // validate sequence
+    const auto seq_path = resolve_seq(argv[1]);
 
-    if (!seq)
+    if (!seq_path)
     {
         std::cerr << "sequence not found: " << argv[1] << "\n";
 
@@ -68,16 +76,29 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    const fs::path h5 = *seq / "radar_data.h5";
-    if (!fs::exists(h5))
+    // look for h5 file given sequence
+    const fs::path h5_path = *seq_path / "radar_data.h5";
+
+    if (!fs::exists(h5_path))
     {
-        std::cerr << "missing " << h5 << "\n";
+        std::cerr << "missing " << h5_path << "\n";
 
         return 1;
     }
 
-    std::cout << seq->filename().string() << ": " << rt::count_detections(h5.string())
-              << " count_detections\n";
+    // load sensors.json into memory
+    std::array<rt::SensorMount, rt::kMaxSensors> sensors;
+    sensors = rt::load_sensor_data(SENSORS_PATH);
+    std::cout << "sensors loaded!" << "\n";
+
+    rt::RadarScenesSource RadarScenesSource = rt::RadarScenesSource(h5_path.string());
+
+    // main loop, consume sensor messages one by one and process
+    while (auto curr_msg = RadarScenesSource.next())
+    {
+    }
+
+    // TODO: test, refactor, write some optimization ideas down
 
     return 0;
 }

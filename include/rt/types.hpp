@@ -26,15 +26,17 @@ struct OdometrySample
     double y_seq{};      // position, meters
     double yaw_seq{};    // heading, radians
     double vx{};         // forward velocity, m/s
-    double yaw_rate{};   // CCW +, rad/s
+    double yaw_rate{};   // CCW (+), rad/s
 };
 
 struct Measurement
 {
-    double range_sc{};   // radial distance to detection, meters
-    double azimuth_sc{}; // from sensor boresight, counterclockwise pos, radians
-    double rcs{};        // dBsm
-    double vr{};         // radial velocity, m/s, - means approaching
+    std::int64_t t_us{};      // us
+    std::uint8_t sensor_id{}; // sensor that collected measurement
+    double range_sc{};        // radial distance to detection, meters
+    double azimuth_sc{};      // from sensor boresight, counterclockwise pos, radians
+    double rcs{};             // dBsm
+    double vr{};              // radial velocity, m/s, (-) means approaching
 };
 
 struct Scan
