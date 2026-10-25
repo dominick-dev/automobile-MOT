@@ -16,7 +16,6 @@
 #include <string>
 
 #define SENSORS_PATH "data/RadarScenes/data/sensors.json"
-#define SEQUENCES_JSON_PATH "data/RadarScenes/data/sequences.json"
 
 namespace fs = std::filesystem;
 
@@ -86,7 +85,17 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    const fs::path sensors_path = SENSORS_PATH;
+
+    if (!fs::exists(sensors_path))
+    {
+        std::cerr << "missing " << SENSORS_PATH << "\n";
+
+        return 1;
+    }
+
     // load sensors.json into memory
+    // sensor id i is indexed to i - 1
     std::array<rt::SensorMount, rt::kMaxSensors> sensors;
     sensors = rt::load_sensor_data(SENSORS_PATH);
     std::cout << "sensors loaded!" << "\n";

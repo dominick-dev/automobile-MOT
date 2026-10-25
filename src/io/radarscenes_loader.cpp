@@ -1,10 +1,16 @@
 #include "rt/io/loader.hpp"
 #include "rt/types.hpp"
+#include <bitset>
 #include <fstream>
 #include <highfive/H5DataType.hpp>
 #include <highfive/H5File.hpp>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <stdexcept>
+#include <string>
+
+namespace
+{
 
 HighFive::CompoundType make_odo()
 {
@@ -31,6 +37,8 @@ HighFive::CompoundType make_measurement()
         {"vr", create_datatype<double>(), offsetof(rt::Measurement, vr)},
     };
 }
+
+} // namespace
 
 HIGHFIVE_REGISTER_TYPE(rt::OdometrySample, make_odo)
 HIGHFIVE_REGISTER_TYPE(rt::Measurement, make_measurement)
@@ -67,7 +75,7 @@ std::optional<rt::SensorMessage> RadarScenesSource::next()
         radar_done = true;
     }
 
-    // both done, reutrn null
+    // both done, return null
     if (odo_done && radar_done)
     {
         return std::nullopt;
@@ -87,6 +95,15 @@ std::optional<rt::SensorMessage> RadarScenesSource::next()
         scan.sensor_id = curr_radar.sensor_id;
         scan.t_us = curr_scan_ts;
 
+        // catch out of order measurements
+        if (curr_scan_ts < RadarScenesSource::prev_ts)
+        {
+            throw std::runtime_error(
+                "ERROR: encountered out of order timestamp in loader (radar): curr_timestamp=" +
+                std::to_string(curr_scan_ts) +
+                ", prev_timestamp=" + std::to_string(RadarScenesSource::prev_ts));
+        }
+
         // while curr row is from same radar and same timestamp
         while (RadarScenesSource::radar_idx_ < RadarScenesSource::radar_.size())
         {
@@ -104,42 +121,73 @@ std::optional<rt::SensorMessage> RadarScenesSource::next()
             RadarScenesSource::radar_idx_++;
         }
 
-        std::cout << "Num scan: " << scan.measurements.size() << "\n";
+        RadarScenesSource::prev_ts = curr_scan_ts;
         return scan;
     }
 
     // read odo
     rt::OdometrySample curr_odo = RadarScenesSource::odo_.at(RadarScenesSource::odo_idx_);
 
+    if (curr_odo.t_us < RadarScenesSource::prev_ts)
+    {
+        throw std::runtime_error(
+            "ERROR: encountered out of order timestamp in loader (odo): curr_timestamp=" +
+            std::to_string(curr_odo.t_us) +
+            ", prev_timestamp=" + std::to_string(RadarScenesSource::prev_ts));
+    }
+
     // odo wins
     RadarScenesSource::odo_idx_++;
+    RadarScenesSource::prev_ts = curr_odo.t_us;
     return curr_odo;
 }
 
 // load in sensor data from sensors.json
 std::array<rt::SensorMount, kMaxSensors> load_sensor_data(const std::string& sensor_path)
 {
-    std::array<SensorMount, kMaxSensors> sensors;
+    std::array<SensorMount, rt::kMaxSensors> sensors{};
+    std::bitset<rt::kMaxSensors> occupied_slots{};
 
     std::ifstream i(sensor_path);
+
+    if (!i.is_open())
+    {
+        throw std::runtime_error("ERROR: could not open sensors data at: " + sensor_path);
+    }
 
     nlohmann::json data;
 
     i >> data;
 
-    size_t idx = 0;
-
     for (const auto& dat : data.items())
     {
         SensorMount new_sensor;
 
-        new_sensor.x = dat.value().at("x").get<int>();
-        new_sensor.y = dat.value().at("y").get<int>();
-        new_sensor.yaw = dat.value().at("yaw").get<int>();
+        new_sensor.x = dat.value().at("x").get<double>();
+        new_sensor.y = dat.value().at("y").get<double>();
+        new_sensor.yaw = dat.value().at("yaw").get<double>();
 
-        sensors[idx] = new_sensor;
+        auto curr_id = dat.value().at("id").get<int>();
 
-        idx++;
+        if (curr_id < 1 || std::cmp_greater(curr_id, rt::kMaxSensors))
+        {
+            throw std::runtime_error(
+                "ERROR: encountered out of range sensor in loader: sensor_id=" +
+                std::to_string(curr_id));
+        }
+
+        if (occupied_slots.test(curr_id - 1))
+        {
+            throw std::runtime_error("ERROR: encountered two sensors with the same id");
+        }
+
+        sensors[curr_id - 1] = new_sensor;
+        occupied_slots.set(curr_id - 1, true);
+    }
+
+    if (!occupied_slots.all())
+    {
+        throw std::runtime_error("ERROR: sensor id missing after load");
     }
 
     return sensors;

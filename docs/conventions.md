@@ -237,7 +237,7 @@ HighFive `read` call each, then merges them with one cursor per table. Each
 `next()` compares the timestamps at the two cursors and returns the earlier
 as one of two messages (a `std::variant`):
 
-- `RadarScan`: all consecutive `radar_data` rows sharing a timestamp and
+- `Scan`: all consecutive `radar_data` rows sharing a timestamp and
   `sensor_id`, i.e. one sensor's full scan. Never a single detection.
 - `OdometrySample`: one `odometry` row.
 

@@ -2,6 +2,7 @@
 #include "../types.hpp"
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -21,6 +22,8 @@ class RadarScenesSource
     // position cursors into data vectors
     std::size_t odo_idx_{};
     std::size_t radar_idx_{};
+    // error checking state
+    std::int64_t prev_ts{};
 };
 
 std::array<rt::SensorMount, kMaxSensors> load_sensor_data(const std::string& sensor_path);
