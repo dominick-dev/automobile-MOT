@@ -29,3 +29,4 @@ jobs:
             ${{ github.event.action == 'synchronize' && format('This is a follow-up push. Focus on changes in {0}..{1} and check whether they address earlier review comments; do not repeat comments on unchanged code.', github.event.before, github.event.after) || '' }}
           claude_args: |
                 --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+          show_full_output: true
