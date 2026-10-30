@@ -8,3 +8,4 @@ Checks: >
   -readability-identifier-length
 WarningsAsErrors: ''
 HeaderFilterRegex: '(include|src)/.*'
+ExcludeHeaderFilterRegex: '.*/_deps/.*'
