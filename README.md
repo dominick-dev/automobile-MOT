@@ -2,7 +2,7 @@
 
 A multi-object tracker for automotive radar. Takes radar detections in, produces tracks with stable IDs out.
 
-**Status:** early. Setup and data loading are done; the tracker is in progress.
+**Status:** early. Setup and data exploration are done, and the coordinate, unit and timing conventions are verified against the dataset ([docs/conventions.md](docs/conventions.md)). The loader is in progress.
 
 ## Build
 

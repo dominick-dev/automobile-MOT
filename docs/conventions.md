@@ -22,6 +22,7 @@ frame), this file is correct.
 | Ego pose        | Linearly interpolated at each detection's own timestamp           |
 | Frames          | Fixed 75 ms bins from t = 0                                       |
 | Pose boundary   | A frame is processed only if its whole window has odometry coverage |
+| Input           | Replayed in timestamp order as sensor scans and odometry samples; a frame is released once odometry reaches its end |
 
 ## Two frames, two jobs
 
@@ -171,8 +172,10 @@ static/moving split will misclassify about 2% of static returns as moving.
 
 ## Sensor timing
 
-The four radars are not synchronized. Each `radar_data` timestamp holds one
-measurement from one sensor. Each sensor free-runs at about 13.5 Hz (period
+The four radars are not synchronized. A `radar_data` timestamp almost always
+holds one scan from one sensor; three times in the dataset (`sequence_34`,
+`_37`, `_128`) two sensors share a timestamp, with each sensor's rows
+contiguous. Each sensor free-runs at about 13.5 Hz (period
 about 73.5 ms), about 54 Hz combined. Odometry at 100 Hz is therefore about
 1.9x the combined radar rate, or 7.4x any single sensor.
 
@@ -215,6 +218,70 @@ instead would produce wrong poses precisely where nothing can check them: in
 `sequence_1`, the dataset's own values for its final scan disagree with
 interpolation by about 1.7 m.
 
+The pipeline applies this rule causally; see "Replay model".
+
+## Replay model
+
+The pipeline consumes a recording the way it would consume live sensors: one
+message at a time, in time order, with no access to anything later. The
+interfaces enforce this, so no stage can look ahead by accident.
+
+```
+radar_data.h5 -> Source          emits one message per next() call
+              -> FrameAssembler  releases one completed frame at a time
+              -> geometry -> clustering -> tracking
+```
+
+**Source.** Reads the `radar_data` and `odometry` tables into memory, one
+HighFive `read` call each, then merges them with one cursor per table. Each
+`next()` compares the timestamps at the two cursors and returns the earlier
+as one of two messages (a `std::variant`):
+
+- `Scan`: all consecutive `radar_data` rows sharing a timestamp and
+  `sensor_id`, i.e. one sensor's full scan. Never a single detection.
+- `OdometrySample`: one `odometry` row.
+
+On equal timestamps the radar scan goes first, so a frame's last detections
+arrive before the odometry sample that closes it. Checks happen as messages
+are emitted, as a live stream would require: a timestamp that goes backwards
+within either table is an error.
+
+**FrameAssembler.** Buffers scans into their frame and keeps recent odometry.
+Frame k covers `[t0 + k*W, t0 + (k+1)*W)` in raw µs and is released when an
+odometry sample with timestamp `>= t0 + (k+1)*W - 1` arrives, provided the
+first odometry sample is at or before the window start. Frames are released
+in index order, including empty ones, so tracks can coast through them. A
+released frame carries its detections plus the odometry samples from the
+last one at or before its start to the first one at or after its end, enough
+to interpolate every detection's pose. At end of stream, frames still waiting
+are discarded.
+
+This reproduces the batch rule under "Frame construction": the assembler
+must drop the same frames per sequence as `check_conventions.py` reports.
+
+**Time.** `t0` is the first radar message's timestamp. The source and
+assembler work in raw `int64` µs; times become `double` seconds from `t0`
+when a frame is released.
+
+**Driver loop.** Single-threaded and deterministic, so evaluation is
+reproducible:
+
+```cpp
+while (auto msg = source.next()) {
+    assembler.push(std::move(*msg));
+    while (auto frame = assembler.pop_ready()) pipeline.process(*frame);
+}
+assembler.finish();
+```
+
+**`scenes.json`** is not a pipeline input: it is an index built after
+recording, and `radar_data.h5` already has everything. Use it only as a test
+oracle for scan grouping (confirm whether `radar_indices` is inclusive or
+half-open first) and for camera frames in visualization.
+
+**Limitation.** The dataset records when each measurement was taken, not when
+it arrived, so replay assumes zero transport delay.
+
 ## Ego pose lookup
 
 Ego pose at any timestamp is linearly interpolated between the two bracketing
@@ -250,7 +317,8 @@ tangential part remains. Deferred until clustering is measured without it.
 Batching into 75 ms frames means a frame can be processed only after its
 window closes: its earliest detection waits up to 75 ms. Interpolating ego
 pose also requires the odometry sample after each detection, adding up to one
-odometry interval (about 10 ms). Where within the window the frame is stamped
+odometry interval (about 10 ms); the replay model releases a frame at exactly
+this point. Where within the window the frame is stamped
 changes the reported time, not when the frame becomes available.
 
 This is acceptable for the current offline, accuracy-scored goals. If onboard

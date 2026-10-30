@@ -58,7 +58,8 @@ add_executable(rt_tests tests/loader_test.cpp)
 target_link_libraries(run PRIVATE rt)
 target_compile_options(run PRIVATE -Wall -Wextra -Wpedantic)
 
-target_link_libraries(rt_tests PRIVATE rt GTest::gtest_main)
+target_include_directories(rt_tests SYSTEM PRIVATE ${highfive_SOURCE_DIR}/include)
+target_link_libraries(rt_tests PRIVATE rt HDF5::HDF5 GTest::gtest_main)
 target_compile_options(rt_tests PRIVATE -Wall -Wextra -Wpedantic)
 
 gtest_discover_tests(rt_tests)
