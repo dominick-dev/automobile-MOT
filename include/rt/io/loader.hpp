@@ -1,10 +1,10 @@
 #pragma once
-#include "../types.hpp"
-#include <array>
+#include "rt/types.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
-#include <string>
+#include <vector>
 
 namespace rt
 {
@@ -12,7 +12,8 @@ namespace rt
 class RadarScenesSource
 {
   public:
-    explicit RadarScenesSource(const std::string& h5_path);
+    explicit RadarScenesSource(const std::filesystem::path& h5_path);
+    [[nodiscard]]
     std::optional<rt::SensorMessage> next();
 
   private:
@@ -26,6 +27,7 @@ class RadarScenesSource
     std::int64_t prev_ts{};
 };
 
-std::array<rt::SensorMount, kMaxSensors> load_sensor_data(const std::string& sensor_path);
+[[nodiscard]]
+SensorArray load_sensor_data(const std::filesystem::path& sensor_path);
 
 } // namespace rt

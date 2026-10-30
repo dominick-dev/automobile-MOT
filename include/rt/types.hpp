@@ -2,6 +2,7 @@
 
 // Definitions of types that cross pipeline stage boundaries
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <variant>
@@ -47,5 +48,6 @@ struct Scan
 };
 
 using SensorMessage = std::variant<Scan, OdometrySample>;
+using SensorArray = std::array<rt::SensorMount, kMaxSensors>; // sensor id i is indexed to i - 1
 
 } // namespace rt

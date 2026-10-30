@@ -8,20 +8,18 @@
 #include "rt/io/loader.hpp"
 #include "rt/types.hpp"
 
-#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <optional>
 #include <string>
 
-#define SENSORS_PATH "data/RadarScenes/data/sensors.json"
-
 namespace fs = std::filesystem;
 
 namespace
 {
 
+constexpr const char* kSensorsPath = "data/RadarScenes/data/sensors.json";
 constexpr const char* kDataDirEnv = "RT_DATA_DIR";
 
 // Resolves a sequence arg to a directory
@@ -85,25 +83,23 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    const fs::path sensors_path = SENSORS_PATH;
+    const fs::path sensors_path = kSensorsPath;
 
     if (!fs::exists(sensors_path))
     {
-        std::cerr << "missing " << SENSORS_PATH << "\n";
+        std::cerr << "missing " << kSensorsPath << "\n";
 
         return 1;
     }
 
     // load sensors.json into memory
-    // sensor id i is indexed to i - 1
-    std::array<rt::SensorMount, rt::kMaxSensors> sensors;
-    sensors = rt::load_sensor_data(SENSORS_PATH);
+    const auto sensors = rt::load_sensor_data(sensors_path);
     std::cout << "sensors loaded!" << "\n";
 
-    rt::RadarScenesSource RadarScenesSource = rt::RadarScenesSource(h5_path.string());
+    rt::RadarScenesSource input_data(h5_path);
 
     // main loop, consume sensor messages one by one and process
-    while (auto curr_msg = RadarScenesSource.next())
+    while (auto curr_msg = input_data.next())
     {
     }
 
