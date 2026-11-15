@@ -96,10 +96,10 @@ int main(int argc, char** argv)
     const auto sensors = rt::load_sensor_data(sensors_path);
     std::cout << "sensors loaded!" << "\n";
 
-    rt::RadarScenesSource input_data(h5_path);
+    rt::RadarScenesSource source(h5_path);
 
     // main loop, consume sensor messages one by one and process
-    while (auto curr_msg = input_data.next())
+    while (auto curr_msg = source.next())
     {
     }
 
