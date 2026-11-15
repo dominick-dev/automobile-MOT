@@ -5,6 +5,7 @@
  * its files to the rt lib
  */
 
+#include "rt/frame/frame_assembler.hpp"
 #include "rt/io/loader.hpp"
 #include "rt/types.hpp"
 
@@ -98,12 +99,14 @@ int main(int argc, char** argv)
 
     rt::RadarScenesSource source(h5_path);
 
+    // init FrameAssembler
+    rt::FrameAssembler assembler;
+
     // main loop, consume sensor messages one by one and process
     while (auto curr_msg = source.next())
     {
+        // assembler.push(std::move(*curr_msg));
     }
-
-    // TODO: test, refactor, write some optimization ideas down
 
     return 0;
 }

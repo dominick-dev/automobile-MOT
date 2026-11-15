@@ -35,7 +35,8 @@ include(GoogleTest)
 
 # library, future me add new .cpp files here as they are made
 add_library(rt
-  src/io/radarscenes_loader.cpp)
+  src/io/radarscenes_loader.cpp
+  src/frame/frame_assembler.cpp)
 
 target_include_directories(rt
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include

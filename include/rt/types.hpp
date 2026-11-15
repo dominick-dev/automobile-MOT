@@ -1,6 +1,7 @@
 #pragma once
 
 // Definitions of types that cross pipeline stage boundaries
+// Above rule may become unwieldy as more types are added, consider breaking up into stages later
 
 #include <array>
 #include <cstddef>
@@ -11,6 +12,7 @@
 namespace rt
 {
 
+/* Loader Types */
 inline constexpr std::size_t kMaxSensors = 4;
 
 struct SensorMount
@@ -49,5 +51,7 @@ struct Scan
 
 using SensorMessage = std::variant<Scan, OdometrySample>;
 using SensorArray = std::array<rt::SensorMount, kMaxSensors>; // sensor id i is indexed to i - 1
+
+/* FrameAssembler Types */
 
 } // namespace rt
