@@ -54,7 +54,7 @@ target_compile_options(rt PRIVATE -Wall -Wextra -Wpedantic)
 
 # executable
 add_executable(run tools/run.cpp)
-add_executable(rt_tests tests/loader_test.cpp)
+add_executable(rt_tests tests/loader_test.cpp tests/assembler_test.cpp)
 
 target_link_libraries(run PRIVATE rt)
 target_compile_options(run PRIVATE -Wall -Wextra -Wpedantic)
