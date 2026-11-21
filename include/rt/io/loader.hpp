@@ -1,5 +1,6 @@
 #pragma once
 #include "rt/types.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -24,7 +25,7 @@ class RadarScenesSource
     std::size_t odo_idx_{};
     std::size_t radar_idx_{};
     // error checking state
-    std::int64_t prev_ts{};
+    std::int64_t prev_ts_{};
 };
 
 [[nodiscard]]

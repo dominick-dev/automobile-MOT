@@ -105,7 +105,12 @@ int main(int argc, char** argv)
     // main loop, consume sensor messages one by one and process
     while (auto curr_msg = source.next())
     {
-        // assembler.push(std::move(*curr_msg));
+        assembler.push(std::move(curr_msg));
+        while (auto frame = assembler.pop_ready())
+        {
+            std::cout << "frame info: " << frame.value().ego_states.size() << "\n";
+            //   process frame
+        }
     }
 
     return 0;

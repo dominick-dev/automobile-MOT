@@ -1,5 +1,6 @@
 #include "rt/io/loader.hpp"
 #include "rt/types.hpp"
+
 #include <algorithm>
 #include <bitset>
 #include <cstddef>
@@ -85,11 +86,11 @@ std::optional<rt::SensorMessage> RadarScenesSource::next()
         const std::uint8_t curr_sensor_id = curr_radar.sensor_id;
 
         // catch out of order measurements
-        if (curr_scan_ts < prev_ts)
+        if (curr_scan_ts < prev_ts_)
         {
             throw std::runtime_error(
                 "ERROR: encountered out of order timestamp in loader (radar): curr_timestamp=" +
-                std::to_string(curr_scan_ts) + ", prev_timestamp=" + std::to_string(prev_ts));
+                std::to_string(curr_scan_ts) + ", prev_timestamp=" + std::to_string(prev_ts_));
         }
 
         // determine scan range, update state
@@ -97,10 +98,10 @@ std::optional<rt::SensorMessage> RadarScenesSource::next()
 
         const auto scan_end = std::find_if(
             scan_start, radar_.end(), [curr_scan_ts, curr_sensor_id](const Measurement& m)
-            { return m.t_us != curr_scan_ts || m.sensor_id != curr_sensor_id; });
+            { return (m.t_us != curr_scan_ts) || (m.sensor_id != curr_sensor_id); });
 
         radar_idx_ = static_cast<std::size_t>(std::distance(radar_.begin(), scan_end));
-        prev_ts = curr_scan_ts;
+        prev_ts_ = curr_scan_ts;
 
         return rt::Scan{
             .sensor_id = curr_radar.sensor_id,
@@ -112,16 +113,16 @@ std::optional<rt::SensorMessage> RadarScenesSource::next()
     // read odo
     const rt::OdometrySample curr_odo = odo_.at(odo_idx_);
 
-    if (curr_odo.t_us < prev_ts)
+    if (curr_odo.t_us < prev_ts_)
     {
         throw std::runtime_error(
             "ERROR: encountered out of order timestamp in loader (odo): curr_timestamp=" +
-            std::to_string(curr_odo.t_us) + ", prev_timestamp=" + std::to_string(prev_ts));
+            std::to_string(curr_odo.t_us) + ", prev_timestamp=" + std::to_string(prev_ts_));
     }
 
     // odo wins
     odo_idx_++;
-    prev_ts = curr_odo.t_us;
+    prev_ts_ = curr_odo.t_us;
     return curr_odo;
 }
 
