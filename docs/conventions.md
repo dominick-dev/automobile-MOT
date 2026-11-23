@@ -18,7 +18,7 @@ frame), this file is correct.
 | Sequence frame  | Fixed to the world, arbitrary origin. Holds all tracking state    |
 | Angles          | Radians, counterclockwise-positive, zero along +x                 |
 | Radial velocity | m/s, negative = approaching                                       |
-| Time            | `int64` µs inside the loader; `double` seconds from the first radar timestamp everywhere else |
+| Time            | `int64` µs inside the Source and FrameAssembler; `double` seconds from the first radar timestamp in every released frame and downstream |
 | Ego pose        | Linearly interpolated at each detection's own timestamp           |
 | Frames          | Fixed 75 ms bins from t = 0                                       |
 | Pose boundary   | A frame is processed only if its whole window has odometry coverage |
@@ -158,14 +158,15 @@ static/moving split will misclassify about 2% of static returns as moving.
 ## Timing
 
 - **Raw timestamps** in both tables are `int64` microseconds on an arbitrary
-  per-sequence epoch. They stay integer inside the loader, so binning and
-  comparison use exact integer arithmetic.
+  per-sequence epoch. They stay integer inside the Source and the
+  FrameAssembler, so binning and comparison use exact integer arithmetic.
 - **t = 0** is the earliest `radar_data` timestamp in the sequence. Odometry
   timestamps use the same offset. In every sequence odometry starts before
   the radar, so early odometry samples have negative times; they serve only
   as interpolation endpoints.
-- **Everywhere downstream of the loader**, time is `double` seconds from
-  t = 0. Double precision is ample: timestamps up to a few hundred seconds at
+- **From frame release onward**, time is `double` seconds from t = 0. The
+  FrameAssembler converts once, as `(t_us - t0) / 1e6` with the subtraction
+  done in integers, when it builds a frame. Double precision is ample: timestamps up to a few hundred seconds at
   microsecond resolution need about 9 significant digits of double's 15–16.
 - **Rationale**: integer microseconds invite unit-mixing bugs at every `dt`
   computation. One unit everywhere keeps physics code consistent.
@@ -248,13 +249,16 @@ within either table is an error.
 
 **FrameAssembler.** Buffers scans into their frame and keeps recent odometry.
 Frame k covers `[t0 + k*W, t0 + (k+1)*W)` in raw µs and is released when an
-odometry sample with timestamp `>= t0 + (k+1)*W - 1` arrives, provided the
-first odometry sample is at or before the window start. Frames are released
+odometry sample with timestamp `>= t0 + (k+1)*W - 1` (the window's last
+microsecond) arrives. If no odometry sample is at or before the window start,
+the frame is discarded instead of released. Frames are released or discarded
 in index order, including empty ones, so tracks can coast through them. A
 released frame carries its detections plus the odometry samples from the
-last one at or before its start to the first one at or after its end, enough
-to interpolate every detection's pose. At end of stream, frames still waiting
-are discarded.
+last one at or before its start through the first one at or after
+`t0 + (k+1)*W - 1`, enough to interpolate every detection's pose. A scan
+timestamped before the current window's start arrived after its frame was
+decided and is an error. At end of stream, frames still waiting are
+discarded.
 
 This reproduces the batch rule under "Frame construction": the assembler
 must drop the same frames per sequence as `check_conventions.py` reports.

@@ -1,6 +1,7 @@
 #pragma once
 
 // Definitions of types that cross pipeline stage boundaries
+// Above rule may become unwieldy as more types are added, consider breaking up into stages later
 
 #include <array>
 #include <cstddef>
@@ -11,6 +12,7 @@
 namespace rt
 {
 
+/* Loader Types */
 inline constexpr std::size_t kMaxSensors = 4;
 
 struct SensorMount
@@ -49,5 +51,36 @@ struct Scan
 
 using SensorMessage = std::variant<Scan, OdometrySample>;
 using SensorArray = std::array<rt::SensorMount, kMaxSensors>; // sensor id i is indexed to i - 1
+
+/* FrameAssembler Types */
+inline constexpr int64_t kFrameWindowSizeUs = 75'000; // 75,000 us == 75 ms
+
+struct Detection
+{
+    double t_s{};             // time of collection, seconds
+    std::uint8_t sensor_id{}; // sensor that collected measurement
+    double range_sc{};        // radial distance to detection, meters
+    double azimuth_sc{};      // from sensor boresight, counterclockwise pos, radians
+    double rcs{};             // dBsm
+    double vr{};              // radial velocity, m/s, (-) means approaching
+};
+
+struct EgoState
+{
+    double t_s{};      // time of collection, seconds
+    double x_seq{};    // position, meters
+    double y_seq{};    // position, meters
+    double yaw_seq{};  // heading, radians
+    double vx{};       // forward velocity, m/s
+    double yaw_rate{}; // CCW (+), rad/s
+};
+
+struct Frame
+{
+    std::int64_t frame_idx{};          // frame counter, zero indexed
+    double frame_time{};               // overall frame time, seconds
+    std::vector<Detection> detections; // detections in frame
+    std::vector<EgoState> ego_states;  // odo samples in frame
+};
 
 } // namespace rt

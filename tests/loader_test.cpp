@@ -335,12 +335,14 @@ TEST_F(LoaderTest, SourceSplitsSensorsSharingATimestamp)
         write_h5({{.timestamp = 500}}, {
                                            {.timestamp = 100, .sensor_id = 1, .range_sc = 1.5F},
                                            {.timestamp = 100, .sensor_id = 1, .range_sc = 2.5F},
-                                           {.timestamp = 100,
-                                            .sensor_id = 2,
-                                            .range_sc = 3.5F,
-                                            .azimuth_sc = -0.25F,
-                                            .rcs = 7.0F,
-                                            .vr = -4.0F},
+                                           {
+                                               .timestamp = 100,
+                                               .sensor_id = 2,
+                                               .range_sc = 3.5F,
+                                               .azimuth_sc = -0.25F,
+                                               .rcs = 7.0F,
+                                               .vr = -4.0F,
+                                           },
                                        });
 
     rt::RadarScenesSource source(path);

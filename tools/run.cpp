@@ -5,14 +5,17 @@
  * its files to the rt lib
  */
 
+#include "rt/frame/frame_assembler.hpp"
 #include "rt/io/loader.hpp"
 #include "rt/types.hpp"
 
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -43,9 +46,7 @@ std::optional<fs::path> resolve_seq(const std::string& arg)
     return std::nullopt;
 }
 
-} // namespace
-
-int main(int argc, char** argv)
+int run(int argc, char** argv)
 {
     // TODO: extend this to also take an "-all" flag, processes all available sequences
     // arg check
@@ -96,14 +97,44 @@ int main(int argc, char** argv)
     const auto sensors = rt::load_sensor_data(sensors_path);
     std::cout << "sensors loaded!" << "\n";
 
-    rt::RadarScenesSource input_data(h5_path);
+    rt::RadarScenesSource source(h5_path);
+
+    // init FrameAssembler
+    rt::FrameAssembler assembler;
 
     // main loop, consume sensor messages one by one and process
-    while (auto curr_msg = input_data.next())
+    while (auto curr_msg = source.next())
     {
+        assembler.push(std::move(*curr_msg));
+        while (auto frame = assembler.pop_ready())
+        {
+            std::cout << "frame info: " << frame.value().ego_states.size() << "\n";
+            //   process frame
+        }
     }
 
-    // TODO: test, refactor, write some optimization ideas down
+    std::cout << "dropped frames: " << assembler.dropped_frames() << "\n";
 
     return 0;
+}
+
+} // namespace
+
+// the loader and assembler throw on bad data; report it instead of terminating
+int main(int argc, char** argv)
+{
+    try
+    {
+        return run(argc, argv);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "error: " << e.what() << "\n";
+    }
+    catch (...)
+    {
+        std::cerr << "error: unknown exception\n";
+    }
+
+    return 1;
 }
