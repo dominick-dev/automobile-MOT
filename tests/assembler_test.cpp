@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -198,4 +199,59 @@ TEST_F(FrameAssemblerTest, TrimKeepsLatestSampleBeforeNextWindowStart)
     ASSERT_EQ(frames.size(), 2U);
     ASSERT_EQ(frames[1].ego_states.size(), 3U); // 70'000, 80'000, 150'000
     EXPECT_DOUBLE_EQ(frames[1].ego_states.front().t_s, 0.070);
+}
+
+TEST_F(FrameAssemblerTest, ScanExactlyAtWindowEndBelongsToNextFrame)
+{
+    odo(-10);
+    scan(0);
+    scan(75'000); // first microsecond of frame 1
+    odo(80'000);  // closes frame 0
+    odo(150'000); // closes frame 1
+
+    const auto frames = drain();
+    ASSERT_EQ(frames.size(), 2U);
+    EXPECT_EQ(frames[0].detections.size(), 1U);
+    ASSERT_EQ(frames[1].detections.size(), 1U);
+    EXPECT_DOUBLE_EQ(frames[1].detections[0].t_s, 0.075);
+}
+
+TEST_F(FrameAssemblerTest, OdoExactlyAtWindowEndMinusOneIsTheBackBracket)
+{
+    odo(-10);
+    scan(0);
+    odo(74'999); // last microsecond of frame 0: closes it and is its back bracket
+
+    const auto frames = drain();
+    ASSERT_EQ(frames.size(), 1U);
+    ASSERT_EQ(frames[0].ego_states.size(), 2U);
+    EXPECT_DOUBLE_EQ(frames[0].ego_states.back().t_s, 0.074999);
+}
+
+TEST_F(FrameAssemblerTest, ThrowsOnScanForAnAlreadyReleasedWindow)
+{
+    odo(-10);
+    scan(0);
+    odo(80'000); // releases frame 0
+    EXPECT_THROW(scan(50'000), std::runtime_error);
+}
+
+TEST_F(FrameAssemblerTest, ThrowsOnOdometryGoingBackwards)
+{
+    odo(-10);
+    odo(30'000);
+    EXPECT_THROW(odo(20'000), std::runtime_error);
+}
+
+TEST_F(FrameAssemblerTest, CountsDiscardedAndStillWaitingFramesAsDropped)
+{
+    scan(0);
+    odo(74'999); // frame 0 has no front bracket -> discarded
+    scan(100'000);
+    odo(150'000); // releases frame 1
+    scan(160'000);
+    scan(300'000); // windows 2, 3 and 4 never get a back bracket
+
+    EXPECT_EQ(drain().size(), 1U);
+    EXPECT_EQ(fa.dropped_frames(), 4); // 1 discarded + 3 waiting
 }
