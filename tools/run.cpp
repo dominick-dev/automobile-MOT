@@ -10,10 +10,12 @@
 #include "rt/types.hpp"
 
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -44,9 +46,7 @@ std::optional<fs::path> resolve_seq(const std::string& arg)
     return std::nullopt;
 }
 
-} // namespace
-
-int main(int argc, char** argv)
+int run(int argc, char** argv)
 {
     // TODO: extend this to also take an "-all" flag, processes all available sequences
     // arg check
@@ -116,4 +116,25 @@ int main(int argc, char** argv)
     std::cout << "dropped frames: " << assembler.dropped_frames() << "\n";
 
     return 0;
+}
+
+} // namespace
+
+// the loader and assembler throw on bad data; report it instead of terminating
+int main(int argc, char** argv)
+{
+    try
+    {
+        return run(argc, argv);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "error: " << e.what() << "\n";
+    }
+    catch (...)
+    {
+        std::cerr << "error: unknown exception\n";
+    }
+
+    return 1;
 }
