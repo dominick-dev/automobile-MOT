@@ -1,170 +1,229 @@
 #include "rt/frame/frame_assembler.hpp"
 #include "rt/types.hpp"
 
+#include <algorithm>
 #include <cstdint>
-#include <iostream>
+#include <iterator>
 #include <optional>
+#include <stdexcept>
+#include <string>
+#include <utility>
 #include <variant>
 #include <vector>
+
+namespace
+{
+
+constexpr double kUsecInSec = 1E6;
+
+[[nodiscard]]
+double us_to_s(std::int64_t t_us, std::int64_t t0)
+{
+    return static_cast<double>(t_us - t0) / kUsecInSec;
+}
+
+[[nodiscard]]
+rt::Detection meas_to_det(const rt::Measurement& meas, std::int64_t t0)
+{
+    return rt::Detection{
+        .t_s = us_to_s(meas.t_us, t0),
+        .sensor_id = meas.sensor_id,
+        .range_sc = meas.range_sc,
+        .azimuth_sc = meas.azimuth_sc,
+        .rcs = meas.rcs,
+        .vr = meas.vr,
+    };
+}
+
+[[nodiscard]]
+rt::EgoState odo_to_ego(const rt::OdometrySample& odo, std::int64_t t0)
+{
+    return rt::EgoState{
+        .t_s = us_to_s(odo.t_us, t0),
+        .x_seq = odo.x_seq,
+        .y_seq = odo.y_seq,
+        .yaw_seq = odo.yaw_seq,
+        .vx = odo.vx,
+        .yaw_rate = odo.yaw_rate,
+    };
+}
+
+} // namespace
 
 namespace rt
 {
 
-void FrameAssembler::push(std::optional<rt::SensorMessage> msg)
+void FrameAssembler::push(SensorMessage msg)
 {
-    // check msg type
-    if (!msg)
-    {
-        std::cout << "msg was null!\n";
-    }
-
     // if scan
-    if (const auto* scan = std::get_if<Scan>(&(*msg)))
+    if (auto* scan = std::get_if<Scan>(&msg))
     {
-        // set t0 if not already done, convert us to s
-        if (FrameAssembler::t0_ == std::nullopt)
+        // set t0 if not already done
+        if (!t0_.has_value())
         {
-            FrameAssembler::t0_ = scan->t_us;
+            t0_ = scan->t_us;
+        }
+
+        // a scan before window k's start belongs to a frame already released or discarded
+        const std::int64_t window_start = *t0_ + (k_ * kFrameWindowSizeUs);
+        if (scan->t_us < window_start)
+        {
+            throw std::runtime_error("ERROR: assembler encountered late scan: curr window start=" +
+                                     std::to_string(window_start) +
+                                     ", scan time=" + std::to_string(scan->t_us));
         }
 
         // add to scan buffer
-        FrameAssembler::scan_buff_.emplace_back(*scan);
+        scan_buff_.emplace_back(std::move(*scan));
     }
     // if odo more work!
-    else if (const auto* odo = std::get_if<OdometrySample>(&(*msg)))
+    else if (const auto* odo = std::get_if<OdometrySample>(&msg))
     {
+        // odometry before the window start is normal (front bracket), but it must not go
+        // backwards relative to what is already buffered
+        if (!odo_buff_.empty() && odo->t_us < odo_buff_.back().t_us)
+        {
+            throw std::runtime_error(
+                "ERROR: assembler encountered out of order odometry: prev odo time=" +
+                std::to_string(odo_buff_.back().t_us) + ", odo time=" + std::to_string(odo->t_us));
+        }
+
         // add to odo buffer
-        FrameAssembler::odo_buff_.emplace_back(*odo);
+        odo_buff_.emplace_back(*odo);
 
-        // released release is skipped if an odo message arrives and t0 is not yet set after
-        if (FrameAssembler::t0_ != std::nullopt)
+        // release only if t0_ has been set
+        if (t0_.has_value())
         {
-            FrameAssembler::release();
+            release(t0_.value());
         }
-    }
-}
-
-void FrameAssembler::release()
-{
-    std::int64_t window_start{};
-    std::int64_t window_end{};
-
-    while (true)
-    {
-
-        // get window start and end for k (in us)
-        window_start = FrameAssembler::t0_.value() + (FrameAssembler::k_ * kFrameWindowSize);
-        window_end = window_start + kFrameWindowSize;
-
-        // break if last odo < window end -1, last odo released no new frames
-        if (FrameAssembler::odo_buff_.empty() ||
-            FrameAssembler::odo_buff_.back().t_us < (window_end - 1))
-        {
-            return;
-        }
-
-        // if yes then either create frame k (has front odo bracket) or discarding frame k (does not
-        // have a front bracket)
-        if (!FrameAssembler::odo_buff_.empty() &&
-            FrameAssembler::odo_buff_.front().t_us > window_start)
-        {
-            // on discard discard k's scans, increment k, and continue with release check
-            while (!FrameAssembler::scan_buff_.empty() &&
-                   FrameAssembler::scan_buff_.front().t_us < window_end)
-            {
-                FrameAssembler::scan_buff_.pop_front();
-            }
-        }
-        else
-        {
-            // on create new frame...
-
-            // create detections for new frame
-            std::vector<Detection> dets{};
-            // pop off front of scan deque and collect until hit scan w/ ts >= window end - 1
-            // stopping condition scan above still gets copied!
-            while (!FrameAssembler::scan_buff_.empty() &&
-                   FrameAssembler::scan_buff_.front().t_us < window_end)
-            {
-                const auto curr_scan = FrameAssembler::scan_buff_.front();
-
-                for (const auto& m : curr_scan.measurements)
-                {
-                    // while popping off, create Detection for each scan, convert to s
-                    dets.push_back(Detection{
-                        .t_s = static_cast<double>(m.t_us - FrameAssembler::t0_.value()) / 1E6,
-                        .sensor_id = m.sensor_id,
-                        .range_sc = m.range_sc,
-                        .azimuth_sc = m.azimuth_sc,
-                        .rcs = m.rcs,
-                        .vr = m.vr,
-                    });
-                }
-
-                FrameAssembler::scan_buff_.pop_front();
-            }
-
-            // trim odo buff for current window k
-            // keep the latest sample <= window start, drop all else
-            while (FrameAssembler::odo_buff_.size() > 1 &&
-                   (FrameAssembler::odo_buff_.at(1).t_us <= window_start))
-            {
-                FrameAssembler::odo_buff_.pop_front();
-            }
-
-            // create EgoStates for new frame
-            std::vector<EgoState> egos{};
-            bool hit_back = false;
-
-            for (const auto& odo : FrameAssembler::odo_buff_)
-            {
-                if (hit_back)
-                {
-                    break;
-                }
-
-                egos.push_back(EgoState{
-                    .t_s = static_cast<double>(odo.t_us - FrameAssembler::t0_.value()) / 1E6,
-                    .x_seq = odo.x_seq,
-                    .y_seq = odo.y_seq,
-                    .yaw_seq = odo.yaw_seq,
-                    .vx = odo.vx,
-                    .yaw_rate = odo.yaw_rate,
-                });
-
-                if (odo.t_us >= window_end - 1)
-                {
-                    hit_back = true;
-                }
-            }
-
-            // when done add this new frame to frame_queue_
-            FrameAssembler::frame_queue_.push_back(Frame{
-                .frame_idx = FrameAssembler::k_,
-                .frame_time = ((static_cast<double>((window_start + window_end)) / 2) -
-                               static_cast<double>(FrameAssembler::t0_.value())) /
-                              1E6,
-                .detections = dets,
-                .ego_states = egos,
-            });
-        }
-
-        // increment k and loop back to top in case multiple frames are released
-        FrameAssembler::k_++;
     }
 }
 
 std::optional<Frame> FrameAssembler::pop_ready()
 {
-    if (!FrameAssembler::frame_queue_.empty())
+    if (!frame_queue_.empty())
     {
-        auto returned = std::move(FrameAssembler::frame_queue_.front());
-        FrameAssembler::frame_queue_.pop_front();
+        auto returned = std::move(frame_queue_.front());
+        frame_queue_.pop_front();
 
         return returned;
     }
 
     return std::nullopt;
+}
+
+std::int64_t FrameAssembler::dropped_frames() const
+{
+    // every window from k through the last buffered scan's window is still waiting
+    std::int64_t pending = 0;
+    if (t0_.has_value() && !scan_buff_.empty())
+    {
+        pending = ((scan_buff_.back().t_us - *t0_) / kFrameWindowSizeUs) - k_ + 1;
+    }
+
+    return discarded_ + pending;
+}
+
+void FrameAssembler::release(const std::int64_t t0)
+{
+    while (true)
+    {
+        // get window start and end for k (in us)
+        const std::int64_t window_start = t0 + (k_ * kFrameWindowSizeUs);
+        const std::int64_t window_end = window_start + kFrameWindowSizeUs;
+
+        // break if last odo < window end -1, last odo released no new frames
+        if (odo_buff_.empty() || odo_buff_.back().t_us < (window_end - 1))
+        {
+            return;
+        }
+
+        // either create frame k (has front odo bracket) or discard frame k (no front bracket)
+        if (odo_buff_.front().t_us > window_start)
+        {
+            // on discard discard k's scans, increment k, and continue with release check
+            discard(window_end);
+        }
+        else
+        {
+            // create detections for new frame
+            std::vector<Detection> dets = create_dets(window_end, t0);
+
+            // keep the latest sample <= window start, drop all else
+            trim_odo(window_start);
+
+            // create EgoStates for new frame
+            std::vector<EgoState> egos = create_egos(window_end, t0);
+
+            // add new frame to frame_queue_
+            frame_queue_.push_back(Frame{
+                .frame_idx = k_,
+                .frame_time = us_to_s(window_start + (kFrameWindowSizeUs / 2), t0),
+                .detections = std::move(dets),
+                .ego_states = std::move(egos),
+            });
+        }
+
+        // increment k and loop back in case multiple frames are released
+        k_++;
+    }
+}
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+std::vector<Detection> FrameAssembler::create_dets(std::int64_t window_end, std::int64_t t0)
+
+{
+    std::vector<Detection> dets{};
+    while (!scan_buff_.empty() && scan_buff_.front().t_us < window_end)
+    {
+        const Scan& curr_scan = scan_buff_.front();
+
+        for (const auto& m : curr_scan.measurements)
+        {
+            // while popping off, create Detection for each scan, convert to s
+            dets.push_back(meas_to_det(m, t0));
+        }
+
+        scan_buff_.pop_front();
+    }
+
+    return dets;
+}
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+std::vector<EgoState> FrameAssembler::create_egos(std::int64_t window_end, std::int64_t t0) const
+{
+    std::vector<EgoState> egos{};
+
+    // get back odo bracket of current window
+    const auto back = std::ranges::find_if(odo_buff_, [window_end](const OdometrySample& odo)
+                                           { return odo.t_us >= window_end - 1; });
+
+    egos.reserve(std::distance(odo_buff_.begin(), std::next(back)));
+
+    // convert each odo in range to ego, write to egos
+    std::ranges::transform(odo_buff_.begin(), std::next(back), std::back_inserter(egos),
+                           [t0](const OdometrySample& odo) { return odo_to_ego(odo, t0); });
+
+    return egos;
+}
+
+void FrameAssembler::discard(std::int64_t window_end)
+{
+    while (!scan_buff_.empty() && scan_buff_.front().t_us < window_end)
+    {
+        scan_buff_.pop_front();
+    }
+
+    ++discarded_;
+}
+
+void FrameAssembler::trim_odo(std::int64_t window_start)
+{
+    while (odo_buff_.size() > 1 && (odo_buff_.at(1).t_us <= window_start))
+    {
+        odo_buff_.pop_front();
+    }
 }
 
 } // namespace rt

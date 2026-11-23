@@ -14,7 +14,6 @@ namespace rt
 
 /* Loader Types */
 inline constexpr std::size_t kMaxSensors = 4;
-inline constexpr int64_t kFrameWindowSize = 75 * 1E3; // 7,500 us == 75 ms
 
 struct SensorMount
 {
@@ -54,6 +53,8 @@ using SensorMessage = std::variant<Scan, OdometrySample>;
 using SensorArray = std::array<rt::SensorMount, kMaxSensors>; // sensor id i is indexed to i - 1
 
 /* FrameAssembler Types */
+inline constexpr int64_t kFrameWindowSizeUs = 75'000; // 75,000 us == 75 ms
+
 struct Detection
 {
     double t_s{};             // time of collection, seconds
